@@ -10,6 +10,7 @@ import hashlib
 import time
 import os
 import plotly.express as px
+import csv
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -115,6 +116,7 @@ DATA_DIR = "data"
 WEEKLY_REPORT_FILE = "Stolovaia ZHD1.csv"
 MONTHLY_REPORT_FILE = "Stol_Zhd month1.csv"
 ORDERS_FILE = "orders.csv"
+MENU_FILE = "menu.csv"
 
 def ensure_report_dir():
     """Ensure reports directory exists"""
@@ -177,33 +179,55 @@ def save_orders(orders_df):
     orders_df.to_csv(filepath, index=False, encoding='utf-8-sig')
 
 # --- Menu Management ---
+def create_default_menu():
+    """Create default menu file"""
+    ensure_directories()
+    menu_file = os.path.join(DATA_DIR, MENU_FILE)
+    
+    default_menu = pd.DataFrame({
+        'day': ['Понедельник', 'Понедельник', 'Понедельник', 'Вторник', 'Вторник', 'Вторник', 'Среда', 'Среда', 'Среда', 'Четверг', 'Четверг', 'Четверг', 'Пятница', 'Пятница', 'Пятница'],
+        'item_name': ['Борщ', 'Котлета с пюре', 'Компот', 'Суп куриный', 'Плов', 'Чай', 'Солянка', 'Рыба с рисом', 'Кисель', 'Рассольник', 'Гречка с мясом', 'Сок', 'Лагман', 'Макароны', 'Кофе'],
+        'category': ['Обед', 'Обед', 'Напитки', 'Обед', 'Обед', 'Напитки', 'Обед', 'Обед', 'Напитки', 'Обед', 'Обед', 'Напитки', 'Обед', 'Обед', 'Напитки'],
+        'price': [450, 550, 150, 400, 600, 100, 480, 650, 120, 470, 550, 200, 700, 500, 250],
+        'available': [True, True, True, True, True, True, True, True, True, True, True, True, True, True, True]
+    })
+    
+    # Save with proper encoding
+    default_menu.to_csv(menu_file, index=False, encoding='utf-8-sig')
+    return default_menu
+
 def load_menu_from_sheet():
     """Load weekly menu from CSV file"""
     ensure_directories()
-    menu_file = os.path.join(DATA_DIR, 'menu.csv')
+    menu_file = os.path.join(DATA_DIR, MENU_FILE)
+    
     try:
         if os.path.exists(menu_file):
-            return pd.read_csv(menu_file, encoding='utf-8')
+            # Try different encodings
+            encodings = ['utf-8-sig', 'utf-8', 'cp1251', 'latin1']
+            for encoding in encodings:
+                try:
+                    df = pd.read_csv(menu_file, encoding=encoding)
+                    if not df.empty and 'day' in df.columns:
+                        return df
+                except:
+                    continue
+            
+            # If all encodings fail, recreate the file
+            st.warning("Файл меню поврежден. Создается новый файл...")
+            return create_default_menu()
         else:
-            # Create default menu
-            default_menu = pd.DataFrame({
-                'day': ['Понедельник', 'Понедельник', 'Понедельник', 'Вторник', 'Вторник', 'Вторник', 'Среда', 'Среда', 'Среда', 'Четверг', 'Четверг', 'Четверг', 'Пятница', 'Пятница', 'Пятница'],
-                'item_name': ['Борщ', 'Котлета с пюре', 'Компот', 'Суп куриный', 'Плов', 'Чай', 'Солянка', 'Рыба с рисом', 'Кисель', 'Рассольник', 'Гречка с мясом', 'Сок', 'Лагман', 'Макароны', 'Кофе'],
-                'category': ['Обед', 'Обед', 'Напитки', 'Обед', 'Обед', 'Напитки', 'Обед', 'Обед', 'Напитки', 'Обед', 'Обед', 'Напитки', 'Обед', 'Обед', 'Напитки'],
-                'price': [450, 550, 150, 400, 600, 100, 480, 650, 120, 470, 550, 200, 700, 500, 250],
-                'available': [True, True, True, True, True, True, True, True, True, True, True, True, True, True, True]
-            })
-            default_menu.to_csv(menu_file, index=False, encoding='utf-8')
-            return default_menu
+            # Create default menu if file doesn't exist
+            return create_default_menu()
     except Exception as e:
         st.error(f"Ошибка загрузки меню: {e}")
-        return pd.DataFrame()
+        return create_default_menu()
 
 def save_menu_to_sheet(menu_df):
     """Save updated menu to CSV file"""
     ensure_directories()
-    menu_file = os.path.join(DATA_DIR, 'menu.csv')
-    menu_df.to_csv(menu_file, index=False, encoding='utf-8')
+    menu_file = os.path.join(DATA_DIR, MENU_FILE)
+    menu_df.to_csv(menu_file, index=False, encoding='utf-8-sig')
 
 def add_new_item(day, item_name, category, price, available=True):
     """Add a new menu item"""
@@ -218,6 +242,21 @@ def add_new_item(day, item_name, category, price, available=True):
     menu_df = pd.concat([menu_df, new_item], ignore_index=True)
     save_menu_to_sheet(menu_df)
     return True
+
+def update_menu_item(day, item_name, new_price=None, new_category=None, new_available=None):
+    """Update a specific menu item"""
+    menu_df = load_menu_from_sheet()
+    mask = (menu_df['day'] == day) & (menu_df['item_name'] == item_name)
+    if mask.any():
+        if new_price is not None:
+            menu_df.loc[mask, 'price'] = new_price
+        if new_category is not None:
+            menu_df.loc[mask, 'category'] = new_category
+        if new_available is not None:
+            menu_df.loc[mask, 'available'] = new_available
+        save_menu_to_sheet(menu_df)
+        return True
+    return False
 
 # --- Order Management ---
 def generate_order_number():
@@ -375,7 +414,6 @@ def generate_chef_qr():
 # --- Chef Authentication ---
 def verify_chef_password(input_password):
     """Verify chef password"""
-    # Default password for demo
     expected_password = "admin123"
     return input_password == expected_password
 
@@ -474,44 +512,47 @@ def main():
             # Display menu items
             st.markdown(f"### 🍽️ Меню на {selected_day}")
             
-            cols = st.columns(3)
-            for idx, (_, item) in enumerate(filtered_menu.iterrows()):
-                if item['available']:
-                    with cols[idx % 3]:
-                        with st.container():
-                            st.markdown(f"""
-                                <div class="card">
-                                    <h4 style="font-weight: 800;">{item['item_name']}</h4>
-                                    <p style="color: #64748b; font-size: 0.875rem;">{item['category']}</p>
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
-                                        <span style="font-size: 1.25rem; font-weight: 800; color: #f97316;">{item['price']}₸</span>
+            if not filtered_menu.empty:
+                cols = st.columns(3)
+                for idx, (_, item) in enumerate(filtered_menu.iterrows()):
+                    if item['available']:
+                        with cols[idx % 3]:
+                            with st.container():
+                                st.markdown(f"""
+                                    <div class="card">
+                                        <h4 style="font-weight: 800;">{item['item_name']}</h4>
+                                        <p style="color: #64748b; font-size: 0.875rem;">{item['category']}</p>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
+                                            <span style="font-size: 1.25rem; font-weight: 800; color: #f97316;">{item['price']}₸</span>
+                                        </div>
                                     </div>
-                                </div>
-                            """, unsafe_allow_html=True)
-                            
-                            col1, col2 = st.columns([1, 1])
-                            with col1:
-                                quantity = st.number_input("Кол-во", min_value=0, max_value=10, key=f"qty_{item['item_name']}_{idx}", label_visibility="collapsed")
-                            with col2:
-                                if st.button("➕ В корзину", key=f"add_{item['item_name']}_{idx}", use_container_width=True):
-                                    if quantity > 0:
-                                        found = False
-                                        for cart_item in st.session_state.cart:
-                                            if cart_item['name'] == item['item_name']:
-                                                cart_item['quantity'] += quantity
-                                                found = True
-                                                break
-                                        if not found:
-                                            st.session_state.cart.append({
-                                                'name': item['item_name'],
-                                                'price': int(item['price']),
-                                                'quantity': quantity,
-                                                'category': item['category']
-                                            })
-                                        st.success(f"Добавлено {quantity} x {item['item_name']}")
-                                        st.rerun()
-                                    elif quantity == 0:
-                                        st.warning("Выберите количество")
+                                """, unsafe_allow_html=True)
+                                
+                                col1, col2 = st.columns([1, 1])
+                                with col1:
+                                    quantity = st.number_input("Кол-во", min_value=0, max_value=10, key=f"qty_{item['item_name']}_{idx}", label_visibility="collapsed")
+                                with col2:
+                                    if st.button("➕ В корзину", key=f"add_{item['item_name']}_{idx}", use_container_width=True):
+                                        if quantity > 0:
+                                            found = False
+                                            for cart_item in st.session_state.cart:
+                                                if cart_item['name'] == item['item_name']:
+                                                    cart_item['quantity'] += quantity
+                                                    found = True
+                                                    break
+                                            if not found:
+                                                st.session_state.cart.append({
+                                                    'name': item['item_name'],
+                                                    'price': int(item['price']),
+                                                    'quantity': quantity,
+                                                    'category': item['category']
+                                                })
+                                            st.success(f"Добавлено {quantity} x {item['item_name']}")
+                                            st.rerun()
+                                        elif quantity == 0:
+                                            st.warning("Выберите количество")
+            else:
+                st.info(f"На {selected_day} пока нет блюд в этой категории")
             
             # Checkout
             if st.session_state.get('show_checkout', False):
@@ -546,8 +587,8 @@ def main():
                                     st.rerun()
                             
                             elif payment_method == "QR-код":
-                                order_number = generate_order_number()
-                                qr_img = generate_payment_qr(order_number, total)
+                                temp_order_number = generate_order_number()
+                                qr_img = generate_payment_qr(temp_order_number, total)
                                 buf = BytesIO()
                                 qr_img.save(buf, format="PNG")
                                 st.image(buf.getvalue(), caption="QR-код для оплаты", width=250)
@@ -610,6 +651,8 @@ def main():
                         save_menu_to_sheet(edited_df)
                         st.success("Меню обновлено!")
                         st.rerun()
+                else:
+                    st.info("Меню пусто. Добавьте блюда через вкладку 'Добавить блюдо'")
             
             with tab2:
                 st.markdown("### Добавление блюда")
@@ -630,7 +673,6 @@ def main():
             with tab3:
                 st.markdown("### 📦 Выдача заказов")
                 
-                # Show pending orders
                 pending_orders = get_pending_orders()
                 
                 if not pending_orders.empty:
@@ -658,7 +700,6 @@ def main():
                 
                 completed_orders = get_completed_orders()
                 if not completed_orders.empty:
-                    st.info(f"✅ Выдано заказов: {len(completed_orders)}")
                     for _, order in completed_orders.iterrows():
                         st.markdown(f"- **{order['order_number']}** - {order['student_name']} ({order['student_class']}) - {order['date']}")
             
