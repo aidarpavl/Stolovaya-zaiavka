@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -182,21 +182,24 @@ def load_monthly_report():
 
 # --- Menu Management (Chef only) ---
 def load_menu_from_sheet():
-    """Load weekly menu from Google Sheet"""
-    weekly_sheet, _ = init_google_sheets()
-    if weekly_sheet:
-        data = weekly_sheet.get_all_records()
-        return pd.DataFrame(data)
-    return pd.DataFrame()
+    """Load weekly menu from CSV file instead of Google Sheets"""
+    try:
+        return pd.read_csv('menu.csv', encoding='utf-8')
+    except:
+        # Create default menu if file doesn't exist
+        default_menu = pd.DataFrame({
+            'day': ['Понедельник', 'Понедельник', 'Вторник', 'Среда'],
+            'item_name': ['Борщ', 'Котлета', 'Суп', 'Рыба'],
+            'category': ['Обед', 'Обед', 'Обед', 'Обед'],
+            'price': [450, 550, 400, 600],
+            'available': [True, True, True, True]
+        })
+        default_menu.to_csv('menu.csv', index=False, encoding='utf-8')
+        return default_menu
 
 def save_menu_to_sheet(menu_df):
-    """Save updated menu to Google Sheet"""
-    weekly_sheet, _ = init_google_sheets()
-    if weekly_sheet:
-        # Clear existing data and update
-        weekly_sheet.clear()
-        weekly_sheet.update([menu_df.columns.values.tolist()] + menu_df.values.tolist())
-
+    """Save updated menu to CSV file"""
+    menu_df.to_csv('menu.csv', index=False, encoding='utf-8')
 def update_menu_item(day, item_name, new_price=None, new_category=None, new_available=None):
     """Update a specific menu item"""
     menu_df = load_menu_from_sheet()
