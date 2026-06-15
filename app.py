@@ -9,12 +9,12 @@ import datetime
 import hashlib
 import time
 import os
-import plotly.express as plt
+import plotly.express as px
 import csv
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="GymnaEats - Школьная столовая",
+    page_title="SchoolEats - Школьная столовая",
     page_icon="🍽️",
     layout="wide",
     initial_sidebar_state="auto"
@@ -80,6 +80,9 @@ def load_css():
         footer {
             visibility: hidden;
         }
+        .stAlert {
+            border-radius: 1rem;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -144,8 +147,9 @@ def load_weekly_report():
         if os.path.exists(filepath):
             return pd.read_csv(filepath, encoding='utf-8-sig')
         else:
+            # Create empty DataFrame with correct columns
             return pd.DataFrame(columns=['order_number', 'date', 'day', 'student_name', 'student_class', 'item', 'category', 'quantity', 'price', 'total_item_price', 'order_total', 'payment_method', 'status'])
-    except:
+    except Exception as e:
         return pd.DataFrame(columns=['order_number', 'date', 'day', 'student_name', 'student_class', 'item', 'category', 'quantity', 'price', 'total_item_price', 'order_total', 'payment_method', 'status'])
 
 def load_monthly_report():
@@ -157,7 +161,7 @@ def load_monthly_report():
             return pd.read_csv(filepath, encoding='utf-8-sig')
         else:
             return pd.DataFrame(columns=['order_number', 'date', 'day', 'student_name', 'student_class', 'item', 'category', 'quantity', 'price', 'total_item_price', 'order_total', 'payment_method', 'status'])
-    except:
+    except Exception as e:
         return pd.DataFrame(columns=['order_number', 'date', 'day', 'student_name', 'student_class', 'item', 'category', 'quantity', 'price', 'total_item_price', 'order_total', 'payment_method', 'status'])
 
 def load_orders():
@@ -166,10 +170,16 @@ def load_orders():
     filepath = os.path.join(REPORT_DIR, ORDERS_FILE)
     try:
         if os.path.exists(filepath):
-            return pd.read_csv(filepath, encoding='utf-8-sig')
+            df = pd.read_csv(filepath, encoding='utf-8-sig')
+            # Ensure all required columns exist
+            required_columns = ['order_number', 'date', 'day', 'student_name', 'student_class', 'items', 'total_price', 'payment_method', 'status']
+            for col in required_columns:
+                if col not in df.columns:
+                    df[col] = ''
+            return df
         else:
             return pd.DataFrame(columns=['order_number', 'date', 'day', 'student_name', 'student_class', 'items', 'total_price', 'payment_method', 'status'])
-    except:
+    except Exception as e:
         return pd.DataFrame(columns=['order_number', 'date', 'day', 'student_name', 'student_class', 'items', 'total_price', 'payment_method', 'status'])
 
 def save_orders(orders_df):
@@ -192,7 +202,6 @@ def create_default_menu():
         'available': [True, True, True, True, True, True, True, True, True, True, True, True, True, True, True]
     })
     
-    # Save with proper encoding
     default_menu.to_csv(menu_file, index=False, encoding='utf-8-sig')
     return default_menu
 
@@ -203,7 +212,6 @@ def load_menu_from_sheet():
     
     try:
         if os.path.exists(menu_file):
-            # Try different encodings
             encodings = ['utf-8-sig', 'utf-8', 'cp1251', 'latin1']
             for encoding in encodings:
                 try:
@@ -212,15 +220,10 @@ def load_menu_from_sheet():
                         return df
                 except:
                     continue
-            
-            # If all encodings fail, recreate the file
-            st.warning("Файл меню поврежден. Создается новый файл...")
             return create_default_menu()
         else:
-            # Create default menu if file doesn't exist
             return create_default_menu()
     except Exception as e:
-        st.error(f"Ошибка загрузки меню: {e}")
         return create_default_menu()
 
 def save_menu_to_sheet(menu_df):
@@ -243,21 +246,6 @@ def add_new_item(day, item_name, category, price, available=True):
     save_menu_to_sheet(menu_df)
     return True
 
-def update_menu_item(day, item_name, new_price=None, new_category=None, new_available=None):
-    """Update a specific menu item"""
-    menu_df = load_menu_from_sheet()
-    mask = (menu_df['day'] == day) & (menu_df['item_name'] == item_name)
-    if mask.any():
-        if new_price is not None:
-            menu_df.loc[mask, 'price'] = new_price
-        if new_category is not None:
-            menu_df.loc[mask, 'category'] = new_category
-        if new_available is not None:
-            menu_df.loc[mask, 'available'] = new_available
-        save_menu_to_sheet(menu_df)
-        return True
-    return False
-
 # --- Order Management ---
 def generate_order_number():
     """Generate unique order number"""
@@ -271,7 +259,6 @@ def place_order(student_name, student_class, items, total_price, payment_method)
     current_date = datetime.datetime.now()
     day_name = current_date.strftime("%A")
     
-    # Translate day to Russian
     day_translation = {
         'Monday': 'Понедельник',
         'Tuesday': 'Вторник',
@@ -283,7 +270,6 @@ def place_order(student_name, student_class, items, total_price, payment_method)
     }
     day_name_ru = day_translation.get(day_name, day_name)
     
-    # Convert items to string for storage
     items_str = ", ".join([f"{item['name']} x{item['quantity']}" for item in items])
     
     order_data = {
@@ -298,12 +284,10 @@ def place_order(student_name, student_class, items, total_price, payment_method)
         'status': 'pending'
     }
     
-    # Load existing orders
     orders_df = load_orders()
     orders_df = pd.concat([orders_df, pd.DataFrame([order_data])], ignore_index=True)
     save_orders(orders_df)
     
-    # Update reports
     update_reports(order_number, current_date.date(), day_name_ru, student_name, student_class, items, total_price, payment_method)
     
     return order_number
@@ -317,7 +301,6 @@ def update_reports(order_number, date, day_name, student_name, student_class, it
     
     date_str = date.strftime("%Y-%m-%d")
     
-    # Update weekly report
     for item in items:
         new_entry = pd.DataFrame([{
             'order_number': order_number,
@@ -335,24 +318,6 @@ def update_reports(order_number, date, day_name, student_name, student_class, it
             'status': 'pending'
         }])
         weekly_df = pd.concat([weekly_df, new_entry], ignore_index=True)
-    
-    # Update monthly report
-    for item in items:
-        new_entry = pd.DataFrame([{
-            'order_number': order_number,
-            'date': date_str,
-            'day': day_name,
-            'student_name': student_name,
-            'student_class': student_class,
-            'item': item['name'],
-            'category': item['category'],
-            'quantity': item['quantity'],
-            'price': item['price'],
-            'total_item_price': item['price'] * item['quantity'],
-            'order_total': total_price,
-            'payment_method': payment_method,
-            'status': 'pending'
-        }])
         monthly_df = pd.concat([monthly_df, new_entry], ignore_index=True)
     
     save_weekly_report(weekly_df)
@@ -360,27 +325,24 @@ def update_reports(order_number, date, day_name, student_name, student_class, it
 
 def complete_order(order_number):
     """Mark order as completed (issued)"""
-    # Update orders
     orders_df = load_orders()
     orders_df.loc[orders_df['order_number'] == order_number, 'status'] = 'completed'
     save_orders(orders_df)
     
-    # Update weekly report
     weekly_df = load_weekly_report()
-    if not weekly_df.empty:
+    if not weekly_df.empty and 'order_number' in weekly_df.columns:
         weekly_df.loc[weekly_df['order_number'] == order_number, 'status'] = 'completed'
         save_weekly_report(weekly_df)
     
-    # Update monthly report
     monthly_df = load_monthly_report()
-    if not monthly_df.empty:
+    if not monthly_df.empty and 'order_number' in monthly_df.columns:
         monthly_df.loc[monthly_df['order_number'] == order_number, 'status'] = 'completed'
         save_monthly_report(monthly_df)
 
 def get_pending_orders():
     """Get all pending orders"""
     orders_df = load_orders()
-    if not orders_df.empty:
+    if not orders_df.empty and 'status' in orders_df.columns:
         pending = orders_df[orders_df['status'] == 'pending']
         return pending
     return pd.DataFrame()
@@ -388,7 +350,7 @@ def get_pending_orders():
 def get_completed_orders():
     """Get all completed orders"""
     orders_df = load_orders()
-    if not orders_df.empty:
+    if not orders_df.empty and 'status' in orders_df.columns:
         completed = orders_df[orders_df['status'] == 'completed']
         return completed
     return pd.DataFrame()
@@ -414,12 +376,11 @@ def generate_chef_qr():
 # --- Chef Authentication ---
 def verify_chef_password(input_password):
     """Verify chef password"""
-    expected_password = "123*"  # Пароль изменен на 123*
+    expected_password = "123*"
     return input_password == expected_password
 
 # --- Main App ---
 def main():
-    # Ensure directories exist
     ensure_directories()
     
     # Header
@@ -481,7 +442,6 @@ def main():
     
     # Student View
     if st.session_state.role == "student":
-        # Show last order number if exists
         if st.session_state.last_order_number:
             st.markdown(f"""
                 <div class="order-number">
@@ -490,26 +450,21 @@ def main():
                 </div>
             """, unsafe_allow_html=True)
         
-        # Load menu
         menu_df = load_menu_from_sheet()
         
         if menu_df.empty:
             st.warning("Меню пока не загружено. Пожалуйста, зайдите позже.")
         else:
-            # Day selector
             days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница']
             selected_day = st.selectbox("Выберите день:", days, index=0)
             
-            # Category filter
             all_categories = ['Все'] + list(menu_df['category'].unique())
             selected_category = st.selectbox("Категория:", all_categories)
             
-            # Filter menu
             filtered_menu = menu_df[menu_df['day'] == selected_day]
             if selected_category != 'Все':
                 filtered_menu = filtered_menu[filtered_menu['category'] == selected_category]
             
-            # Display menu items
             st.markdown(f"### 🍽️ Меню на {selected_day}")
             
             if not filtered_menu.empty:
@@ -549,12 +504,9 @@ def main():
                                                 })
                                             st.success(f"Добавлено {quantity} x {item['item_name']}")
                                             st.rerun()
-                                        elif quantity == 0:
-                                            st.warning("Выберите количество")
             else:
                 st.info(f"На {selected_day} пока нет блюд в этой категории")
             
-            # Checkout
             if st.session_state.get('show_checkout', False):
                 with st.expander("Оформление заказа", expanded=True):
                     st.markdown("### 📝 Информация о заказе")
@@ -601,7 +553,7 @@ def main():
                                     time.sleep(2)
                                     st.rerun()
                             
-                            else:  # Наличными
+                            else:
                                 order_number = place_order(student_name, student_class, st.session_state.cart, total, "cash")
                                 st.session_state.last_order_number = order_number
                                 st.success(f"✅ Заказ оформлен! Номер: {order_number}")
@@ -617,19 +569,16 @@ def main():
     else:
         if not st.session_state.chef_authenticated:
             st.markdown("### 🔐 Доступ повара")
-            st.info("Пароль: ")
+            st.info("Пароль: Если забыли обратитесь к разработчику")
             password = st.text_input("Введите пароль:", type="password")
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if st.button("Войти", use_container_width=True):
-                    if verify_chef_password(password):
-                        st.session_state.chef_authenticated = True
-                        st.success("Добро пожаловать, повар!")
-                        st.rerun()
-                    else:
-                        st.error("Неверный пароль")
+            if st.button("Войти", use_container_width=True):
+                if verify_chef_password(password):
+                    st.session_state.chef_authenticated = True
+                    st.success("Добро пожаловать, повар!")
+                    st.rerun()
+                else:
+                    st.error("Неверный пароль")
         else:
-            # Chef tabs
             tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Меню", "➕ Добавить блюдо", "📦 Заказы", "📊 Отчеты", "🔐 QR"])
             
             with tab1:
@@ -654,8 +603,6 @@ def main():
                         save_menu_to_sheet(edited_df)
                         st.success("Меню обновлено!")
                         st.rerun()
-                else:
-                    st.info("Меню пусто. Добавьте блюда через вкладку 'Добавить блюдо'")
             
             with tab2:
                 st.markdown("### Добавление блюда")
@@ -681,17 +628,17 @@ def main():
                 if not pending_orders.empty:
                     st.info(f"⏳ Ожидают выдачи: {len(pending_orders)} заказов")
                     
-                    for _, order in pending_orders.iterrows():
-                        with st.expander(f"🎫 {order['order_number']} - {order['student_name']} ({order['student_class']}) - {order['payment_method']}"):
+                    for idx, (_, order) in enumerate(pending_orders.iterrows()):
+                        with st.expander(f"🎫 {order.get('order_number', 'N/A')} - {order.get('student_name', 'Unknown')} ({order.get('student_class', 'N/A')}) - {order.get('payment_method', 'N/A')}"):
                             col1, col2 = st.columns(2)
                             with col1:
-                                st.markdown(f"**📅 Дата:** {order['date']}")
-                                st.markdown(f"**💰 Сумма:** {order['total_price']}₸")
-                                st.markdown(f"**💳 Оплата:** {order['payment_method']}")
+                                st.markdown(f"**📅 Дата:** {order.get('date', 'N/A')}")
+                                st.markdown(f"**💰 Сумма:** {order.get('total_price', 0)}₸")
+                                st.markdown(f"**💳 Оплата:** {order.get('payment_method', 'N/A')}")
                             with col2:
-                                st.markdown(f"**🍽️ Заказ:** {order['items']}")
+                                st.markdown(f"**🍽️ Заказ:** {order.get('items', 'N/A')}")
                             
-                            if st.button("✅ Выдать заказ", key=f"complete_{order['order_number']}"):
+                            if st.button("✅ Выдать заказ", key=f"complete_{order.get('order_number', idx)}_{idx}"):
                                 complete_order(order['order_number'])
                                 st.success(f"Заказ {order['order_number']} выдан!")
                                 st.rerun()
@@ -704,7 +651,7 @@ def main():
                 completed_orders = get_completed_orders()
                 if not completed_orders.empty:
                     for _, order in completed_orders.iterrows():
-                        st.markdown(f"- **{order['order_number']}** - {order['student_name']} ({order['student_class']}) - {order['date']}")
+                        st.markdown(f"- **{order.get('order_number', 'N/A')}** - {order.get('student_name', 'Unknown')} ({order.get('student_class', 'N/A')}) - {order.get('date', 'N/A')}")
             
             with tab4:
                 st.markdown("### 📊 Отчеты")
@@ -713,43 +660,57 @@ def main():
                 
                 if report_type == "Недельный":
                     df = load_weekly_report()
-                    if not df.empty:
+                    if not df.empty and 'order_number' in df.columns:
+                        # Safely get summary data
+                        completed_count = len(df[df['status'] == 'completed']['order_number'].unique()) if 'status' in df.columns else 0
+                        pending_count = len(df[df['status'] == 'pending']['order_number'].unique()) if 'status' in df.columns else 0
+                        total_revenue = df['order_total'].sum() if 'order_total' in df.columns else 0
+                        
                         col1, col2, col3 = st.columns(3)
                         with col1:
-                            completed = df[df['status'] == 'completed']['order_number'].nunique()
-                            st.metric("✅ Выдано", completed)
+                            st.metric("✅ Выдано", completed_count)
                         with col2:
-                            pending = df[df['status'] == 'pending']['order_number'].nunique()
-                            st.metric("⏳ Ожидают", pending)
+                            st.metric("⏳ Ожидают", pending_count)
                         with col3:
-                            st.metric("💰 Выручка", f"{df['order_total'].sum():,.0f}₸")
+                            st.metric("💰 Выручка", f"{total_revenue:,.0f}₸")
                         
-                        st.dataframe(df[['order_number', 'date', 'student_name', 'total_price', 'payment_method', 'status']].drop_duplicates(), use_container_width=True)
+                        # Display orders summary
+                        if 'order_number' in df.columns and 'date' in df.columns and 'student_name' in df.columns and 'total_price' in df.columns:
+                            display_df = df[['order_number', 'date', 'student_name', 'total_price', 'payment_method', 'status']].drop_duplicates(subset=['order_number'])
+                            st.dataframe(display_df, use_container_width=True)
+                        else:
+                            st.info("Недостаточно данных для отображения")
                         
                         csv = df.to_csv(index=False).encode('utf-8-sig')
                         st.download_button("📥 Скачать отчет", csv, WEEKLY_REPORT_FILE, "text/csv")
                     else:
-                        st.info("Нет данных")
+                        st.info("Нет данных за неделю")
                 
                 else:
                     df = load_monthly_report()
-                    if not df.empty:
+                    if not df.empty and 'order_number' in df.columns:
+                        completed_count = len(df[df['status'] == 'completed']['order_number'].unique()) if 'status' in df.columns else 0
+                        pending_count = len(df[df['status'] == 'pending']['order_number'].unique()) if 'status' in df.columns else 0
+                        total_revenue = df['order_total'].sum() if 'order_total' in df.columns else 0
+                        
                         col1, col2, col3 = st.columns(3)
                         with col1:
-                            completed = df[df['status'] == 'completed']['order_number'].nunique()
-                            st.metric("✅ Выдано", completed)
+                            st.metric("✅ Выдано", completed_count)
                         with col2:
-                            pending = df[df['status'] == 'pending']['order_number'].nunique()
-                            st.metric("⏳ Ожидают", pending)
+                            st.metric("⏳ Ожидают", pending_count)
                         with col3:
-                            st.metric("💰 Выручка", f"{df['order_total'].sum():,.0f}₸")
+                            st.metric("💰 Выручка", f"{total_revenue:,.0f}₸")
                         
-                        st.dataframe(df[['order_number', 'date', 'student_name', 'total_price', 'payment_method', 'status']].drop_duplicates(), use_container_width=True)
+                        if 'order_number' in df.columns and 'date' in df.columns and 'student_name' in df.columns and 'total_price' in df.columns:
+                            display_df = df[['order_number', 'date', 'student_name', 'total_price', 'payment_method', 'status']].drop_duplicates(subset=['order_number'])
+                            st.dataframe(display_df, use_container_width=True)
+                        else:
+                            st.info("Недостаточно данных для отображения")
                         
                         csv = df.to_csv(index=False).encode('utf-8-sig')
                         st.download_button("📥 Скачать отчет", csv, MONTHLY_REPORT_FILE, "text/csv")
                     else:
-                        st.info("Нет данных")
+                        st.info("Нет данных за месяц")
             
             with tab5:
                 st.markdown("### 🔐 QR-код повара")
