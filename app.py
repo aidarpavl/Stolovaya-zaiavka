@@ -9,12 +9,12 @@ import datetime
 import hashlib
 import time
 import os
-import plotly.express as px
+import plotly.express as plt
 import csv
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="SchoolEats - Школьная столовая",
+    page_title="GymnaEats - Школьная столовая",
     page_icon="🍽️",
     layout="wide",
     initial_sidebar_state="auto"
@@ -414,7 +414,7 @@ def generate_chef_qr():
 # --- Chef Authentication ---
 def verify_chef_password(input_password):
     """Verify chef password"""
-    expected_password = "admin123"
+    expected_password = "123*"  # Пароль изменен на 123*
     return input_password == expected_password
 
 # --- Main App ---
@@ -617,14 +617,17 @@ def main():
     else:
         if not st.session_state.chef_authenticated:
             st.markdown("### 🔐 Доступ повара")
+            st.info("Пароль: ")
             password = st.text_input("Введите пароль:", type="password")
-            if st.button("Войти"):
-                if verify_chef_password(password):
-                    st.session_state.chef_authenticated = True
-                    st.success("Добро пожаловать, повар!")
-                    st.rerun()
-                else:
-                    st.error("Неверный пароль")
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button("Войти", use_container_width=True):
+                    if verify_chef_password(password):
+                        st.session_state.chef_authenticated = True
+                        st.success("Добро пожаловать, повар!")
+                        st.rerun()
+                    else:
+                        st.error("Неверный пароль")
         else:
             # Chef tabs
             tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Меню", "➕ Добавить блюдо", "📦 Заказы", "📊 Отчеты", "🔐 QR"])
