@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 from io import StringIO
 
-st.set_page_config(page_title="Бауыржана Момышулы атындғы мектеп асханасы", page_icon="🍽️", layout="wide")
+st.set_page_config(page_title="Бауыржана Момышулы атындағы мектеп асханасы", page_icon="🍽️", layout="wide")
 
 st.markdown("""
 <style>
@@ -348,7 +348,7 @@ with st.sidebar:
                     st.rerun()
 
 if st.session_state.role == "Ученик":
-    st.markdown('<div class="main-header">🍽️ Столовая школы Жас Дарын</div>',
+    st.markdown('<div class="main-header">🍽️ Бауыржана Момышұлы атындағы мектеп асханасы</div>',
                 unsafe_allow_html=True)
     st.markdown("---")
 
